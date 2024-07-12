@@ -1,0 +1,79 @@
+package com.example.controller;
+
+import com.example.User;
+import com.example.security.JwtUtil;
+import com.example.services.UserService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.Optional;
+
+@RestController
+@RequestMapping("/api")
+@RequiredArgsConstructor
+@Transactional
+public class AuthController {
+//    @Autowired
+//    UserService services;
+//
+//    @PostMapping("/adduser")
+//    public User saveUser(@RequestBody User user){
+//       return services.saveUser(user);
+//    }
+
+
+
+    private final UserService userService;
+    private final JwtUtil jwtUtil;
+
+    @PostMapping("/register")
+    public ResponseEntity<String> register(@RequestParam String username, @RequestParam String email, @RequestParam String password) {
+        User user = new User();
+        user.setUsername(username);
+        user.setEmail(email);
+        user.setPassword(password);
+        user.setVersion(1);
+        userService.saveUser(user);
+        return ResponseEntity.ok("User registered successfully");
+    }
+
+    @PostMapping("/login")
+    public ResponseEntity<String> login(@RequestParam String email, @RequestParam String password) {
+        User user = userService.getUserByEmail(email);
+        if (user != null && user.getPassword().equals(password)) {
+            String token = jwtUtil.generateToken(email);
+            return ResponseEntity.ok(token);
+        } else {
+            return ResponseEntity.status(401).body("Invalid credentials");
+        }
+    }
+
+    @PostMapping("/validate")
+    public ResponseEntity<Boolean> validate(@RequestParam String token) {
+        boolean isValid = jwtUtil.validateToken(token);
+        return ResponseEntity.ok(isValid);
+    }
+
+    @PostMapping("/update")
+    public ResponseEntity<String> update(@RequestParam String id, @RequestParam String username, @RequestParam String email, @RequestParam String password, @RequestParam int version) {
+        Optional<User> optionalUser = userService.findById(id);
+        if (!optionalUser.isPresent()) {
+            return ResponseEntity.ok("User not found by provided id");
+        } else {
+            User user = optionalUser.get();
+            if (user.getVersion() == version) {
+                return ResponseEntity.ok("Version match. Update failed.");
+            }
+            user.setUsername(username);
+            user.setEmail(email);
+            user.setPassword(password);
+            user.setVersion(version + 1);  // Increment version for optimistic locking
+            userService.saveUser(user);
+            return ResponseEntity.ok("User updated successfully");
+        }
+    }
+
+}
